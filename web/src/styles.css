@@ -1,0 +1,212 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: "Space Grotesk", "Inter", ui-sans-serif, sans-serif;
+
+  --color-ink-950: #08080a;
+  --color-ink-900: #0c0c0f;
+  --color-ink-850: #111116;
+  --color-ink-800: #17171d;
+  --color-ink-700: #1e1e26;
+  --color-ink-600: #2a2a35;
+  --color-ink-500: #3a3a48;
+  --color-ink-400: #6b6b7d;
+  --color-ink-300: #9b9bad;
+  --color-ink-200: #c8c8d4;
+  --color-ink-100: #ecedf2;
+
+  --color-phantom: #7fffbd;
+  --color-phantom-dim: #3b8c6e;
+  --color-phantom-bg: rgba(127, 255, 189, 0.08);
+  --color-flare: #ffb366;
+  --color-flare-bg: rgba(255, 179, 102, 0.08);
+  --color-siren: #ff6b80;
+  --color-siren-bg: rgba(255, 107, 128, 0.08);
+  --color-iris: #9b8cff;
+  --color-iris-bg: rgba(155, 140, 255, 0.08);
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-ink-950);
+    color: var(--color-ink-100);
+    font-feature-settings: "cv11", "ss01", "ss03";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background: var(--color-phantom);
+    color: var(--color-ink-950);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-ink-700);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-ink-600);
+    background-clip: padding-box;
+  }
+
+  input,
+  button,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+
+  [type="text"],
+  [type="password"],
+  textarea {
+    background: transparent;
+    border: none;
+    outline: none;
+  }
+}
+
+@layer components {
+  .grid-bg {
+    background-image:
+      linear-gradient(to right, color-mix(in oklab, var(--color-ink-600) 40%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklab, var(--color-ink-600) 40%, transparent) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 20%, transparent 80%);
+  }
+
+  .panel {
+    position: relative;
+    border-radius: 14px;
+    background: linear-gradient(180deg, var(--color-ink-850), var(--color-ink-900));
+    border: 1px solid var(--color-ink-700);
+    box-shadow:
+      0 1px 0 0 rgba(255, 255, 255, 0.03) inset,
+      0 16px 40px -20px rgba(0, 0, 0, 0.8);
+  }
+
+  .panel-frosted {
+    background: color-mix(in oklab, var(--color-ink-850) 70%, transparent);
+    backdrop-filter: blur(14px);
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .hairline {
+    background: linear-gradient(90deg, transparent, var(--color-ink-600) 20%, var(--color-ink-600) 80%, transparent);
+    height: 1px;
+  }
+
+  .ring-phantom {
+    box-shadow: 0 0 0 1px var(--color-phantom), 0 0 24px -4px var(--color-phantom);
+  }
+
+  .glow-phantom {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--color-phantom) 50%, transparent),
+      0 0 32px -8px var(--color-phantom);
+  }
+
+  .mono {
+    font-family: var(--font-mono);
+    font-feature-settings: "calt" 0, "liga" 0;
+    letter-spacing: -0.01em;
+  }
+
+  .display {
+    font-family: var(--font-display);
+    letter-spacing: -0.03em;
+  }
+
+  .pulse-dot::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: inherit;
+    animation: pulse-ring 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+    opacity: 0.6;
+  }
+
+  @keyframes pulse-ring {
+    0% { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(2.6); opacity: 0; }
+  }
+
+  @keyframes drift-a {
+    0%, 100% { transform: translate3d(-10%, -10%, 0) scale(1); }
+    50% { transform: translate3d(8%, 12%, 0) scale(1.15); }
+  }
+  @keyframes drift-b {
+    0%, 100% { transform: translate3d(12%, -6%, 0) scale(1.05); }
+    50% { transform: translate3d(-10%, 10%, 0) scale(0.95); }
+  }
+  @keyframes drift-c {
+    0%, 100% { transform: translate3d(-4%, 14%, 0) scale(0.9); }
+    50% { transform: translate3d(14%, -6%, 0) scale(1.1); }
+  }
+
+  .orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.55;
+    pointer-events: none;
+    will-change: transform;
+  }
+
+  @keyframes ticker-in {
+    from { opacity: 0; transform: translateX(12px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .fade-up {
+    animation: fade-up 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  @keyframes bead {
+    0% { offset-distance: 0%; opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { offset-distance: 100%; opacity: 0; }
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  /* CodeMirror — nudge the one-dark theme to blend into our panels. */
+  .cm-editor,
+  .cm-editor .cm-scroller { background: transparent !important; }
+  .cm-editor .cm-gutters  { background: transparent !important; }
+}

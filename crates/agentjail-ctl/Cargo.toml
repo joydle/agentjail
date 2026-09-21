@@ -1,0 +1,36 @@
+[package]
+name = "agentjail-ctl"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Control plane: HTTP API in front of agentjail + agentjail-phantom"
+keywords = ["sandbox", "api", "control-plane", "ai-agents"]
+categories = ["web-programming::http-server"]
+
+[dependencies]
+agentjail.workspace = true
+agentjail-phantom.workspace = true
+libc = "0.2"
+tempfile = "3"
+axum = { version = "0.7", default-features = false, features = ["http1", "tokio", "json", "matched-path", "query"] }
+async-stream = "0.3"
+futures = { version = "0.3", default-features = false, features = ["std", "async-await"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "signal"] }
+tower-http = { version = "0.6", default-features = false, features = ["cors", "trace", "limit"] }
+http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rand = "0.8"
+hex.workspace = true
+subtle.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+async-trait = "0.1"
+time = { version = "0.3", default-features = false, features = ["std", "serde", "formatting", "parsing", "macros"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "time", "macros", "any"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }

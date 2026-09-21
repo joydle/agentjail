@@ -1,0 +1,26 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/bugthesystem/agentjail"
+
+[workspace.dependencies]
+# Internal crates (path-joined for dev convenience; published versions pin).
+agentjail         = { path = "crates/agentjail" }
+agentjail-phantom = { path = "crates/agentjail-phantom" }
+agentjail-ctl     = { path = "crates/agentjail-ctl" }
+
+# Shared externals. Consumers pick their own tokio feature set per crate —
+# no workspace-wide default to avoid pulling unneeded features into
+# library crates.
+anyhow      = "1"
+hex         = "0.4"
+http        = "1"
+serde       = { version = "1", features = ["derive"] }
+serde_json  = "1"
+subtle      = "2"
+thiserror   = "2"
+tracing     = "0.1"

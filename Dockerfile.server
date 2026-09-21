@@ -1,0 +1,52 @@
+# Multi-stage build for the agentjail-server binary (phantom proxy + ctl).
+# Sandbox execution is *not* in this image — this is the credential-broker
+# service. Pair it with the agentjail engine or any sandbox you already trust.
+
+FROM rust:1.88-slim-bookworm AS build
+WORKDIR /src
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev libseccomp-dev ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY Cargo.toml Cargo.lock ./
+COPY crates/agentjail crates/agentjail
+COPY crates/agentjail-phantom crates/agentjail-phantom
+COPY crates/agentjail-ctl crates/agentjail-ctl
+COPY crates/agentjail-server crates/agentjail-server
+
+RUN cargo build --release -p agentjail-server
+
+FROM debian:bookworm-slim
+# Jail runtimes: node/npm, python3, git, curl, and bun (for the App
+# Builder / Review Bot demos that shell out to `bun install`, `bun run`,
+# etc.). Bun's upstream installer drops a single binary — symlinking it
+# into /usr/local/bin keeps PATH clean.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libseccomp2 \
+    nodejs npm python3 python3-pip \
+    git curl unzip \
+  && curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local/bun bash \
+  && ln -s /usr/local/bun/bin/bun /usr/local/bin/bun \
+  && apt-get purge -y --auto-remove unzip \
+  && rm -rf /var/lib/apt/lists/*
+# Run as root — sandbox execution needs namespaces + cgroups.
+# The jail engine provides isolation (namespaces, seccomp, cgroups).
+WORKDIR /srv
+
+COPY --from=build /src/target/release/agentjail-server /usr/local/bin/agentjail-server
+
+# Seed script: populates $AGENTJAIL_STATE_DIR/flavors/ with the
+# runtimes baked into this image (nodejs, python, bun). Kept separate
+# from the server binary so operators can review what's pre-declared
+# and swap in their own images without patching Rust code.
+COPY scripts/seed-flavors.sh /usr/local/bin/seed-flavors.sh
+RUN chmod +x /usr/local/bin/seed-flavors.sh
+
+ENV CTL_ADDR=0.0.0.0:7000
+ENV PROXY_ADDR=0.0.0.0:8443
+EXPOSE 7000 8443
+
+# Seed first, then exec the server. `exec` hands PID 1 over so signal
+# forwarding (SIGTERM from docker stop → server graceful shutdown)
+# still works correctly.
+ENTRYPOINT ["/bin/sh", "-c", "/usr/local/bin/seed-flavors.sh && exec /usr/local/bin/agentjail-server \"$@\"", "--"]

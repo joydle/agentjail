@@ -1,0 +1,27 @@
+{
+  "scenario": "noop",
+  "concurrency": 16,
+  "iters": 200,
+  "warmup": 10,
+  "errors": 0,
+  "wall_clock_s": 0.110781113,
+  "throughput_per_s": 1805.361894134427,
+  "latency_us": {
+    "min": 1632,
+    "p50": 4902,
+    "p95": 10624,
+    "p99": 11975,
+    "max": 12460,
+    "mean": 5359,
+    "stddev": 2594
+  },
+  "extra": null,
+  "env": {
+    "kernel": "6.17.8-orbstack-00308-g8f9c941121b1",
+    "cpu_count": 14,
+    "user_namespace": true,
+    "cgroup_v2": true,
+    "agentjail_rev": "c04f6fa"
+  },
+  "timestamp_unix": 1776790888
+}

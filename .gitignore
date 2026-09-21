@@ -1,0 +1,30 @@
+target/
+**/node_modules
+**/.next
+**/dist
+**/*.tsbuildinfo
+.DS_Store
+.claude/
+.env
+.env.*
+!.env.template
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/*.egg-info/
+**/*.egg
+**/build/
+**/.venv/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.tox/
+**/.coverage
+**/htmlcov/
+
+# Bench results — only milestone-labelled JSONs are committed.
+# Anything else (scratch runs, experiments) stays local.
+bench-results/*-scratch.json
+bench-results/*-local.json
+bench-results/*-wip.json

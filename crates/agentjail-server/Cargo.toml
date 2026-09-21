@@ -1,0 +1,30 @@
+[package]
+name = "agentjail-server"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Binary that runs agentjail-phantom + agentjail-ctl as one service"
+
+[[bin]]
+name = "agentjail-server"
+path = "src/main.rs"
+
+[dependencies]
+agentjail.workspace = true
+agentjail-phantom.workspace = true
+agentjail-ctl.workspace = true
+axum = { version = "0.7", default-features = false, features = ["http1", "tokio"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "macros", "signal"] }
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "json"] }
+anyhow.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+http.workspace = true
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+serde_json.workspace = true
+axum = { version = "0.7", default-features = false, features = ["http1", "tokio", "json"] }
+time = { version = "0.3", default-features = false, features = ["std"] }

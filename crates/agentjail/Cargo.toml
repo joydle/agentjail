@@ -1,0 +1,29 @@
+[package]
+name = "agentjail"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Minimal Linux sandbox for untrusted code"
+keywords = ["sandbox", "security", "container", "namespace"]
+categories = ["os::linux-apis", "development-tools"]
+
+[dependencies]
+rustix = { version = "0.38", features = ["process", "mount", "fs", "pipe", "runtime", "thread"] }
+seccompiler = "0.4"
+landlock = "0.4"
+libc = "0.2"
+tokio = { version = "1", features = ["process", "io-util", "rt", "sync", "time", "fs", "net", "macros"] }
+thiserror.workspace = true
+# BLAKE3: SIMD-native, ~3× faster than SHA-NI SHA-256 and parallelizes
+# within a file. We switched while the incremental-snapshot manifest
+# format was unshipped — see docs/internal.md invariant 13.
+blake3 = { version = "1", default-features = false }
+# `no_std` builds of hex need explicit features; keep the local spec
+# rather than inheriting the default workspace one.
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

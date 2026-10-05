@@ -1,0 +1,34 @@
+{
+  "scenario": "stdout-heavy",
+  "concurrency": 1,
+  "iters": 20,
+  "warmup": 3,
+  "errors": 0,
+  "wall_clock_s": 0.120441756,
+  "throughput_per_s": 166.05536704396772,
+  "latency_us": {
+    "min": 3724,
+    "p50": 6106,
+    "p95": 6493,
+    "p99": 6850,
+    "max": 6850,
+    "mean": 5897,
+    "stddev": 766
+  },
+  "extra": {
+    "bytes": 10485760,
+    "mb_per_sec": {
+      "max": 2684.9306388443415,
+      "min": 1459.7510861642895,
+      "p50": 1637.6478202334335
+    }
+  },
+  "env": {
+    "kernel": "6.17.8-orbstack-00308-g8f9c941121b1",
+    "cpu_count": 14,
+    "user_namespace": true,
+    "cgroup_v2": true,
+    "agentjail_rev": "c04f6fa"
+  },
+  "timestamp_unix": 1776790932
+}

@@ -1,0 +1,43 @@
+services:
+  dev:
+    build: .
+    privileged: true
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+    volumes:
+      - .:/workspace
+      - cargo-cache:/usr/local/cargo/registry
+    working_dir: /workspace
+    command: bash
+
+  # GPU testing: requires NVIDIA Container Toolkit on host.
+  # Install: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+  # Run: docker compose run --rm gpu cargo test --test gpu_test -- --nocapture
+  gpu:
+    build: .
+    privileged: true
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+    volumes:
+      - .:/workspace
+      - cargo-cache:/usr/local/cargo/registry
+    working_dir: /workspace
+    command: bash
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  cargo-cache:

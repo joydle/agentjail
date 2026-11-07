@@ -1,0 +1,71 @@
+# Multi-stage build for the agentjail-server binary (phantom proxy + ctl).
+# Sandbox execution is *not* in this image — this is the credential-broker
+# service. Pair it with the agentjail engine or any sandbox you already trust.
+
+# Base images pinned by digest (supply chain): bump tag + digest together,
+# e.g. `docker buildx imagetools inspect rust:1.88-slim-bookworm`.
+FROM rust:1.88-slim-bookworm@sha256:38bc5a86d998772d4aec2348656ed21438d20fcdce2795b56ca434cf21430d89 AS build
+WORKDIR /src
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY Cargo.toml Cargo.lock ./
+COPY crates/agentjail crates/agentjail
+COPY crates/agentjail-phantom crates/agentjail-phantom
+COPY crates/agentjail-ctl crates/agentjail-ctl
+COPY crates/agentjail-server crates/agentjail-server
+
+RUN cargo build --release -p agentjail-server
+
+FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc
+# Jail runtimes: node/npm, python3, git, curl, and bun (for the App
+# Builder / Review Bot demos that shell out to `bun install`, `bun run`,
+# etc.).
+#
+# Bun is a pinned release verified against its published SHA-256 — no
+# `curl | bash`. To bump: set BUN_VERSION and copy the two lines for
+# bun-linux-x64.zip / bun-linux-aarch64.zip from
+# https://github.com/oven-sh/bun/releases/download/bun-v<ver>/SHASUMS256.txt
+ARG BUN_VERSION=1.2.21
+ARG BUN_SHA256_X64=594f454d51ce57199d4320c85cbd495be9c054ef17aaebca5e6c908abfda6179
+ARG BUN_SHA256_AARCH64=0e4c9e54876a160e91812ae3c62d36cfbd68f20e158cb732f63a0d6b7594287b
+ARG TARGETARCH
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    nodejs npm python3 python3-pip \
+    git curl unzip \
+  && arch="${TARGETARCH:-$(dpkg --print-architecture)}" \
+  && case "$arch" in \
+       amd64) bun_arch=x64;     bun_sha="$BUN_SHA256_X64" ;; \
+       arm64) bun_arch=aarch64; bun_sha="$BUN_SHA256_AARCH64" ;; \
+       *) echo "unsupported arch for bun: $arch" >&2; exit 1 ;; \
+     esac \
+  && curl -fsSL --proto '=https' --tlsv1.2 -o /tmp/bun.zip \
+       "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-${bun_arch}.zip" \
+  && echo "${bun_sha}  /tmp/bun.zip" | sha256sum -c - \
+  && unzip -q /tmp/bun.zip -d /tmp/bun \
+  && install -m 0755 "/tmp/bun/bun-linux-${bun_arch}/bun" /usr/local/bin/bun \
+  && rm -rf /tmp/bun /tmp/bun.zip \
+  && apt-get purge -y --auto-remove unzip \
+  && rm -rf /var/lib/apt/lists/*
+# Run as root — sandbox execution needs namespaces + cgroups.
+# The jail engine provides isolation (namespaces, seccomp, cgroups).
+WORKDIR /srv
+
+COPY --from=build /src/target/release/agentjail-server /usr/local/bin/agentjail-server
+
+# Seed script: populates $AGENTJAIL_STATE_DIR/flavors/ with the
+# runtimes baked into this image (nodejs, python, bun). Kept separate
+# from the server binary so operators can review what's pre-declared
+# and swap in their own images without patching Rust code.
+COPY scripts/seed-flavors.sh /usr/local/bin/seed-flavors.sh
+RUN chmod +x /usr/local/bin/seed-flavors.sh
+
+ENV CTL_ADDR=0.0.0.0:7000
+ENV PROXY_ADDR=0.0.0.0:8443
+EXPOSE 7000 8443
+
+# Seed first, then exec the server. `exec` hands PID 1 over so signal
+# forwarding (SIGTERM from docker stop → server graceful shutdown)
+# still works correctly.
+ENTRYPOINT ["/bin/sh", "-c", "/usr/local/bin/seed-flavors.sh && exec /usr/local/bin/agentjail-server \"$@\"", "--"]

@@ -1,0 +1,148 @@
+# agentjail platform: control plane + phantom proxy + sandbox engine + UI.
+#
+# Usage:
+#   make setup     # writes .env.local with a fresh API key + Postgres password
+#   set -a; source .env.local; set +a
+#   docker compose -f docker-compose.platform.yml up --build
+#
+# or by hand:
+#   export AGENTJAIL_API_KEY="aj_$(openssl rand -hex 16)@dev:admin"   # token@tenant:role
+#   export POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+#
+# Then:
+#   open http://localhost:3000     # admin UI
+#   curl http://localhost:7070/healthz
+#
+# Secure by default:
+#   - the server refuses to start without a valid AGENTJAIL_API_KEY
+#     (AGENTJAIL_DEV_INSECURE=1 opts into an open, admin-for-everyone
+#     control plane for local dev only);
+#   - published ports bind to 127.0.0.1 (set AGENTJAIL_BIND=0.0.0.0 to
+#     expose them, behind your own TLS + firewall);
+#   - Postgres is not published at all and has no default password.
+#     Note: an existing `pgdata` volume keeps the password it was
+#     initialised with.
+
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
+    environment:
+      POSTGRES_USER:     agentjail
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD (make setup generates one in .env.local)}
+      POSTGRES_DB:       agentjail
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentjail -d agentjail"]
+      interval: 2s
+      timeout:  3s
+      retries:  20
+    # Not published: only the server talks to Postgres, over the compose
+    # network. Debug with `docker compose exec postgres psql -U agentjail`.
+    restart: unless-stopped
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    # Sandbox execution requires Linux namespaces + cgroups.
+    privileged: true
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+    environment:
+      # Control plane API key(s), `token@tenant:role`. Required: with no
+      # valid key the server refuses to start.
+      AGENTJAIL_API_KEY: ${AGENTJAIL_API_KEY:-}
+      # Dev-only escape hatch: `1` lets the server start with no API key
+      # (every caller is admin). Never set this on a shared host.
+      AGENTJAIL_DEV_INSECURE: ${AGENTJAIL_DEV_INSECURE:-}
+      # Postgres DSN. Points at the sidecar service; the password comes
+      # from POSTGRES_PASSWORD (never logged: the server redacts it).
+      DATABASE_URL: ${DATABASE_URL:-postgres://agentjail:${POSTGRES_PASSWORD}@postgres:5432/agentjail}
+      # Upstream keys — never forwarded to sandboxes. Only these set below
+      # will actually be available to session-creation requests.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-}
+      # Base URL the sandbox uses to reach the phantom proxy. Inside the
+      # docker network that's `http://server:8443`; override if you're
+      # connecting from the host or a veth peer.
+      PROXY_BASE_URL: ${PROXY_BASE_URL:-http://server:8443}
+      # Persistent workspace + snapshot root. Mounted from the named
+      # volume below so it survives container rebuilds.
+      AGENTJAIL_STATE_DIR: ${AGENTJAIL_STATE_DIR:-/var/lib/agentjail}
+      # Optional snapshot retention (unset = no cap).
+      AGENTJAIL_SNAPSHOT_MAX_AGE_SECS: ${AGENTJAIL_SNAPSHOT_MAX_AGE_SECS:-}
+      AGENTJAIL_SNAPSHOT_MAX_COUNT:    ${AGENTJAIL_SNAPSHOT_MAX_COUNT:-}
+      AGENTJAIL_SNAPSHOT_GC_TICK_SECS: ${AGENTJAIL_SNAPSHOT_GC_TICK_SECS:-}
+      # Optional content-addressed pool for incremental snapshots.
+      AGENTJAIL_SNAPSHOT_POOL_DIR:         ${AGENTJAIL_SNAPSHOT_POOL_DIR:-}
+      # Workspace idle reaper interval (default 30s; 0 = off).
+      AGENTJAIL_IDLE_CHECK_INTERVAL_SECS:  ${AGENTJAIL_IDLE_CHECK_INTERVAL_SECS:-}
+      # Hostname-routed reverse proxy for workspace.domains. Unset = off.
+      AGENTJAIL_GATEWAY_ADDR:              ${AGENTJAIL_GATEWAY_ADDR:-}
+      # Jail hardening (defaults on). Set to 0 only on hosts that can't
+      # create user namespaces / lack landlock.
+      AGENTJAIL_USER_NAMESPACE:            ${AGENTJAIL_USER_NAMESPACE:-}
+      AGENTJAIL_LANDLOCK:                  ${AGENTJAIL_LANDLOCK:-}
+      # Concurrency / limits (unset = built-in defaults).
+      AGENTJAIL_MAX_CONCURRENT_PER_TENANT: ${AGENTJAIL_MAX_CONCURRENT_PER_TENANT:-}
+      AGENTJAIL_TOKEN_MAX_TTL_SECS:        ${AGENTJAIL_TOKEN_MAX_TTL_SECS:-}
+      # Structured logs: json | pretty | (unset → compact).
+      LOG_FORMAT:                          ${LOG_FORMAT:-json}
+      RUST_LOG: info,agentjail_phantom=debug,agentjail_ctl=debug,sqlx=warn
+    volumes:
+      - agentjail-state:/var/lib/agentjail
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${AGENTJAIL_BIND:-127.0.0.1}:7070:7000"   # control plane (7000 conflicts with AirPlay on macOS)
+      - "${AGENTJAIL_BIND:-127.0.0.1}:8443:8443"   # phantom proxy
+      - "${AGENTJAIL_BIND:-127.0.0.1}:8080:8080"   # optional gateway (noop unless AGENTJAIL_GATEWAY_ADDR set)
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    environment:
+      AGENTJAIL_BASE_URL: http://server:7000
+    # The static UI never needs the API key server-side; operators paste
+    # it into the login screen.
+    ports:
+      - "${AGENTJAIL_BIND:-127.0.0.1}:3000:3000"
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  # Vite dev server with HMR. Use this while iterating on the UI:
+  #   docker compose -f docker-compose.platform.yml up server web-dev
+  # Then open http://localhost:5173. The Login default already targets
+  # the dockerized control plane on :7070.
+  web-dev:
+    image: oven/bun:1@sha256:1d22548f177f4ff38e0c15baa3c2c46c6c2060ba2d1bc573bb4720b407548f1d
+    working_dir: /app
+    # macOS bind mounts don't deliver inotify; chokidar polling fixes HMR.
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "300"
+    command: sh -c "bun install --frozen-lockfile && bun run dev --host 0.0.0.0 --port 5173"
+    volumes:
+      - ./web:/app
+      - web-dev-modules:/app/node_modules
+    ports:
+      - "${AGENTJAIL_BIND:-127.0.0.1}:5173:5173"
+    depends_on:
+      - server
+    profiles: ["dev"]
+
+volumes:
+  pgdata:
+  web-dev-modules:
+  agentjail-state:

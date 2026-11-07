@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- B1: Empty agent  {∅}
+       Curly braces + empty-set glyph. The agent is contained AND the
+       phantom token is empty. Now with a soft grid + radial depth so
+       the mark feels like a console pane, not a flat swatch. -->
+  <defs>
+    <!-- Background: radial lift at centre, fades to ink at edges. -->
+    <radialGradient id="b1-bg" cx="50%" cy="50%" r="70%">
+      <stop offset="0"   stop-color="#15151A"/>
+      <stop offset="1"   stop-color="#0A0A0B"/>
+    </radialGradient>
+
+    <!-- 8-unit grid, low-contrast mint. Reads as a console pane at
+         hero size; softens into ink at favicon scale. -->
+    <pattern id="b1-grid" width="8" height="8" patternUnits="userSpaceOnUse">
+      <path d="M8 0 L0 0 L0 8"
+            fill="none" stroke="#7FFFBD"
+            stroke-width="0.45" opacity="0.12"/>
+    </pattern>
+
+    <!-- Soft mint halo behind the glyph (hints at the "contained
+         process"). -->
+    <radialGradient id="b1-halo" cx="50%" cy="50%" r="50%">
+      <stop offset="0"    stop-color="#7FFFBD" stop-opacity="0.22"/>
+      <stop offset="0.55" stop-color="#7FFFBD" stop-opacity="0.06"/>
+      <stop offset="1"    stop-color="#7FFFBD" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Clip so the grid fills the rounded square cleanly. -->
+    <clipPath id="b1-clip">
+      <rect width="128" height="128" rx="24"/>
+    </clipPath>
+  </defs>
+
+  <!-- Base + grid + halo, all inside the rounded clip. -->
+  <g clip-path="url(#b1-clip)">
+    <rect width="128" height="128" fill="url(#b1-bg)"/>
+    <rect width="128" height="128" fill="url(#b1-grid)"/>
+    <circle cx="64" cy="64" r="30" fill="url(#b1-halo)"/>
+  </g>
+
+  <!-- Left brace { -->
+  <path d="M40 30
+           Q30 30 30 40
+           L30 58
+           Q30 64 22 64
+           Q30 64 30 70
+           L30 88
+           Q30 98 40 98"
+        stroke="#7FFFBD" stroke-width="4.5"
+        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Right brace } -->
+  <path d="M88 30
+           Q98 30 98 40
+           L98 58
+           Q98 64 106 64
+           Q98 64 98 70
+           L98 88
+           Q98 98 88 98"
+        stroke="#7FFFBD" stroke-width="4.5"
+        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Empty-set glyph ∅ (circle + slash) -->
+  <circle cx="64" cy="64" r="14"
+          stroke="#7FFFBD" stroke-width="3.5" fill="none"/>
+  <line x1="52" y1="78" x2="76" y2="50"
+        stroke="#7FFFBD" stroke-width="3.5" stroke-linecap="round"/>
+</svg>

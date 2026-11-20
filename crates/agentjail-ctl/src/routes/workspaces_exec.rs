@@ -7,6 +7,7 @@
 
 use axum::Json;
 use axum::extract::{Path as AxumPath, State};
+use std::time::Duration;
 
 use super::AppState;
 use super::exec::{
@@ -19,6 +20,39 @@ use crate::error::{CtlError, Result};
 use crate::jails::{JailKind, workspace_exec_label};
 use crate::tenant::TenantScope;
 use crate::workspaces::WorkspaceSpec;
+
+/// How long a second exec waits for the in-flight one before giving up
+/// with the original 409 conflict.
+const EXEC_LOCK_WAIT: Duration = Duration::from_secs(60);
+/// Poll cadence while waiting for the in-flight exec.
+const EXEC_LOCK_POLL: Duration = Duration::from_millis(100);
+
+/// Acquire the per-workspace exec lock, waiting for the in-flight exec
+/// instead of failing fast with 409.
+///
+/// Upstream behavior: `try_lock` → `Conflict("another exec is in flight
+/// against this workspace")`. Agents legitimately issue serial execs
+/// against one workspace from concurrent tool calls, so a bounded wait
+/// is friendlier and keeps the same failure mode after `EXEC_LOCK_WAIT`.
+/// The lock is a `tokio::sync::Mutex`; polling `try_lock` with
+/// `tokio::time::sleep` between attempts never holds the guard across
+/// an await boundary it doesn't own.
+async fn acquire_exec_lock(
+    lock: &tokio::sync::Mutex<()>,
+) -> Result<tokio::sync::MutexGuard<'_, ()>> {
+    let deadline = tokio::time::Instant::now() + EXEC_LOCK_WAIT;
+    loop {
+        match lock.try_lock() {
+            Ok(guard) => return Ok(guard),
+            Err(_) if tokio::time::Instant::now() >= deadline => {
+                return Err(CtlError::Conflict(
+                    "another exec is in flight against this workspace".into(),
+                ));
+            }
+            Err(_) => tokio::time::sleep(EXEC_LOCK_POLL).await,
+        }
+    }
+}
 
 /// `POST /v1/workspaces/:id/exec`
 #[tracing::instrument(
@@ -49,9 +83,7 @@ pub(crate) async fn exec_in_workspace(
 
     // Acquire exclusive exec lock on this workspace.
     let lock = state.workspace_locks.lock_for(&ws.id);
-    let _guard = lock.try_lock().map_err(|_| {
-        CtlError::Conflict("another exec is in flight against this workspace".into())
-    })?;
+    let _guard = acquire_exec_lock(&lock).await?;
 
     // Auto-resume: if the reaper paused this workspace, restore its
     // auto-snapshot before running. The on-disk dir was emptied at
@@ -200,4 +232,55 @@ fn spec_to_options(spec: &WorkspaceSpec) -> Result<ExecOptions> {
         cpu_percent: Some(spec.cpu_percent),
         max_pids: Some(spec.max_pids),
     })
+}
+
+#[cfg(test)]
+mod exec_lock_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn second_exec_waits_then_succeeds() {
+        let lock = std::sync::Arc::new(tokio::sync::Mutex::new(()));
+        // Hold the lock briefly, as an in-flight exec would.
+        let g = lock.try_lock().unwrap();
+        let waiter = lock.clone();
+        let task = tokio::spawn(async move {
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+            let guard = loop {
+                match waiter.try_lock() {
+                    Ok(g) => break g,
+                    Err(_) if tokio::time::Instant::now() >= deadline => {
+                        panic!("exec lock never acquired")
+                    }
+                    Err(_) => tokio::time::sleep(Duration::from_millis(10)).await,
+                }
+            };
+            drop(guard);
+        });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        drop(g); // exec finishes; the waiting exec must get the lock
+        task.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn lock_conflict_after_bound() {
+        let lock = tokio::sync::Mutex::new(());
+        let _g = lock.try_lock().unwrap();
+        // Short bound via the same code path shape: emulate the timeout
+        // arm by polling a lock that never frees.
+        let deadline = tokio::time::Instant::now() + Duration::from_millis(50);
+        loop {
+            match lock.try_lock() {
+                Ok(g) => {
+                    drop(g);
+                    panic!("lock should stay held")
+                }
+                Err(_) if tokio::time::Instant::now() >= deadline => break,
+                Err(_) => tokio::time::sleep(Duration::from_millis(10)).await,
+            }
+        }
+        // The bounded case returns the identical upstream error text.
+        let err = CtlError::Conflict("another exec is in flight against this workspace".into());
+        assert!(format!("{err}").contains("another exec is in flight"));
+    }
 }

@@ -16,6 +16,35 @@ use time::OffsetDateTime;
 const DEFAULT_CAPACITY: usize = 2_000;
 /// Hard cap on stdout/stderr stored per row.
 pub const OUTPUT_CAP: usize = 16 * 1024;
+/// Smallest configurable output cap (bytes).
+pub const OUTPUT_CAP_MIN: usize = 4096;
+/// Largest configurable output cap (bytes).
+pub const OUTPUT_CAP_MAX: usize = 8 * 1024 * 1024;
+/// Env var overriding the output cap: bytes, clamped to
+/// `[OUTPUT_CAP_MIN, OUTPUT_CAP_MAX]`. Default: [`OUTPUT_CAP`].
+pub const OUTPUT_CAP_ENV: &str = "AGENTJAIL_OUTPUT_CAP";
+
+/// Clamp an env-provided cap into the supported range.
+fn clamp_output_cap(v: u64) -> usize {
+    (v as usize).clamp(OUTPUT_CAP_MIN, OUTPUT_CAP_MAX)
+}
+
+/// Effective output cap for this process.
+///
+/// Read once from `AGENTJAIL_OUTPUT_CAP` (bytes); unset, empty or
+/// unparseable values keep the historical 16 KiB default. Parsed lazily
+/// on first use so tests and library consumers don't depend on process
+/// env timing.
+pub fn output_cap() -> usize {
+    static CAP: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *CAP.get_or_init(|| {
+        std::env::var(OUTPUT_CAP_ENV)
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .map_or(OUTPUT_CAP, clamp_output_cap)
+    })
+}
 
 /// Kind of jail run.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -365,11 +394,11 @@ impl JailStore for InMemoryJailStore {
             }
             rec.stdout = Some(truncate(
                 &String::from_utf8_lossy(&output.stdout),
-                OUTPUT_CAP,
+                output_cap(),
             ));
             rec.stderr = Some(truncate(
                 &String::from_utf8_lossy(&output.stderr),
-                OUTPUT_CAP,
+                output_cap(),
             ));
         }
     }
@@ -478,8 +507,8 @@ impl JailStore for InMemoryJailStore {
             Err(p) => p.into_inner(),
         };
         if let Some(rec) = g.rows.iter_mut().find(|r| r.id == id) {
-            rec.stdout = Some(truncate(stdout, OUTPUT_CAP));
-            rec.stderr = Some(truncate(stderr, OUTPUT_CAP));
+            rec.stdout = Some(truncate(stdout, output_cap()));
+            rec.stderr = Some(truncate(stderr, output_cap()));
         }
     }
 
@@ -546,6 +575,18 @@ mod tests {
             })
             .await;
         assert_eq!(total, 2);
+    }
+}
+
+#[cfg(test)]
+mod output_cap_tests {
+    #[test]
+    fn clamp_output_cap_bounds() {
+        assert_eq!(super::clamp_output_cap(0), super::OUTPUT_CAP_MIN);
+        assert_eq!(super::clamp_output_cap(4095), super::OUTPUT_CAP_MIN);
+        assert_eq!(super::clamp_output_cap(1_048_576), 1_048_576);
+        assert_eq!(super::clamp_output_cap(64 * 1024 * 1024), super::OUTPUT_CAP_MAX);
+        assert_eq!(super::clamp_output_cap(u64::MAX), super::OUTPUT_CAP_MAX);
     }
 }
 

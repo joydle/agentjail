@@ -26,7 +26,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::error::{CtlError, Result};
-use crate::jails::JailStore;
+use crate::jails::{JailStore, output_cap};
 use crate::sampler;
 use crate::workspaces::{ActiveCgroups, ActiveJailIps};
 
@@ -393,6 +393,9 @@ pub(super) async fn run_monitored_with(
     out
 }
 
+/// Legacy in-flight capture cap; the effective cap is [`output_cap`]
+/// (`AGENTJAIL_OUTPUT_CAP`), read once per process. Kept for tests that
+/// build a buffer around a known size.
 const OUTPUT_CAP_BYTES: usize = 16 * 1024;
 
 /// Largest index `<= i` that lies on a UTF-8 char boundary of `s`
@@ -409,8 +412,9 @@ fn floor_char_boundary(s: &str, i: usize) -> usize {
 }
 
 pub(super) fn push_capped(buf: &mut String, line: &str) {
-    if buf.len() + line.len() > OUTPUT_CAP_BYTES {
-        let take = OUTPUT_CAP_BYTES.saturating_sub(buf.len());
+    let cap = output_cap();
+    if buf.len() + line.len() > cap {
+        let take = cap.saturating_sub(buf.len());
         let take = floor_char_boundary(line, take);
         buf.push_str(&line[..take]);
         if !buf.ends_with('…') {
@@ -424,6 +428,11 @@ pub(super) fn push_capped(buf: &mut String, line: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Legacy in-flight capture cap; the effective cap is
+    /// [`output_cap`] (`AGENTJAIL_OUTPUT_CAP`), read once per process.
+    /// Kept so these tests build a buffer around a known size.
+    const OUTPUT_CAP_BYTES: usize = 16 * 1024;
 
     #[test]
     fn push_capped_does_not_split_multibyte_char_at_cap() {

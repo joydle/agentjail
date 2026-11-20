@@ -5,8 +5,8 @@ use sqlx::{PgPool, Row};
 use time::OffsetDateTime;
 
 use crate::jails::{
-    JailConfigSnapshot, JailKind, JailQuery, JailRecord, JailStatus, JailStore, OUTPUT_CAP,
-    truncate,
+    JailConfigSnapshot, JailKind, JailQuery, JailRecord, JailStatus, JailStore, truncate,
+    output_cap,
 };
 
 /// Postgres-backed jail ledger.
@@ -127,8 +127,8 @@ impl JailStore for PgJailStore {
             ),
             None => (None, None, None, None, None, None),
         };
-        let stdout = truncate(&String::from_utf8_lossy(&output.stdout), OUTPUT_CAP);
-        let stderr = truncate(&String::from_utf8_lossy(&output.stderr), OUTPUT_CAP);
+        let stdout = truncate(&String::from_utf8_lossy(&output.stdout), output_cap());
+        let stderr = truncate(&String::from_utf8_lossy(&output.stderr), output_cap());
 
         let _ = sqlx::query(
             "UPDATE jails SET
@@ -294,8 +294,8 @@ impl JailStore for PgJailStore {
              WHERE id = $1 AND status = 'running'",
         )
         .bind(id)
-        .bind(truncate(stdout, OUTPUT_CAP))
-        .bind(truncate(stderr, OUTPUT_CAP))
+        .bind(truncate(stdout, output_cap()))
+        .bind(truncate(stderr, output_cap()))
         .execute(&self.pool)
         .await;
     }

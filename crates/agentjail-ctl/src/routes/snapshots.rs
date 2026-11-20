@@ -63,7 +63,7 @@ pub(crate) struct SnapshotList {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct FromSnapshotRequest {
-    /// The snapshot to rehydrate into the new workspace's output dir.
+    /// The snapshot to rehydrate into the new workspace's source dir.
     snapshot_id: String,
     /// Parent workspace id the caller claims owns the snapshot. The
     /// route refuses to rehydrate when this doesn't match the snapshot's
@@ -79,9 +79,17 @@ pub(crate) struct FromSnapshotRequest {
 // ---------- handlers ----------
 
 /// `POST /v1/workspaces/:id/snapshot` — captures a snapshot of the
-/// workspace's output dir, freezing the running exec (if any) around the
+/// workspace's source dir (`source_dir`, mounted at `/workspace`),
+/// freezing the running exec (if any) around the
 /// copy. This is the *mid-run snapshot* entry point: safe to call during
 /// a long-running exec; idle workspaces skip the freeze step.
+///
+/// TODO(output-snapshot): docs used to claim this captures the
+/// output dir, but the code captures `source_dir` only. Capturing both
+/// dirs means a second stream in the snapshot format (a second pool
+/// manifest or a sibling dir) touching create/restore/delete/GC and
+/// the auto-snapshot resume path — tracked as future work, so for now
+/// the docs match the code.
 #[tracing::instrument(
     name = "snapshot.create",
     skip_all,
@@ -289,10 +297,10 @@ pub(crate) async fn delete_snapshot(
 }
 
 /// `POST /v1/workspaces/from-snapshot` — rehydrate a snapshot into a
-/// brand-new workspace. The source dir starts empty (the snapshot lives in
-/// the workspace's *output* dir, which is what `live_fork` and
-/// `Snapshot::restore_to` write to). Config is inherited from the parent
-/// workspace when it's still around.
+/// brand-new workspace. The source dir starts empty (the snapshot's
+/// captured source tree is restored into the new workspace's
+/// `source_dir`, which is what the jail sees at `/workspace`). Config is
+/// inherited from the parent workspace when it's still around.
 #[tracing::instrument(
     name = "workspace.from_snapshot",
     skip_all,

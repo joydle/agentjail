@@ -92,9 +92,13 @@ service. The proxy doesn't follow upstream redirects.
 
 A workspace is a persistent source/output tree; each `exec` runs a new
 jail over it, so `npm install` in one call is still there in the next.
-`POST /v1/workspaces/:id/snapshot` captures the output dir, freezing a
+`POST /v1/workspaces/:id/snapshot` captures the workspace's source dir
+(`source_dir`, mounted at `/workspace`), freezing a
 running exec's cgroup for the copy (the snapshot fails rather than
-copying a live tree it can't freeze). `POST /v1/workspaces/from-snapshot`
+copying a live tree it can't freeze). The `output_dir` (`/output`) is
+**not** captured yet — see the TODO in
+`crates/agentjail-ctl/src/routes/snapshots.rs::create_snapshot`.
+`POST /v1/workspaces/from-snapshot`
 creates a workspace from a snapshot and requires `parent_workspace_id`,
 which must match the snapshot's recorded parent.
 

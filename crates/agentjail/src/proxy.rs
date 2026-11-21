@@ -349,6 +349,9 @@ async fn handle_connection(mut client: TcpStream, policy: &ConnPolicy) -> std::i
         };
 
         if !is_allowed(&host, &policy.allowlist) || !policy.allowed_ports.contains(&port) {
+            eprintln!(
+                "[agentjail-proxy] DENIED CONNECT {host}:{port} reason=not in allowlist"
+            );
             writer.write_all(b"HTTP/1.1 403 Forbidden\r\n\r\n").await?;
             return Ok(());
         }
@@ -374,6 +377,9 @@ async fn handle_connection(mut client: TcpStream, policy: &ConnPolicy) -> std::i
             .filter(|sa| is_public_routable(&sa.ip()))
             .collect();
         if routable.is_empty() {
+            eprintln!(
+                "[agentjail-proxy] DENIED CONNECT {host}:{port} reason=destination resolves to no publicly routable address"
+            );
             writer.write_all(b"HTTP/1.1 403 Forbidden\r\n\r\n").await?;
             return Ok(());
         }
